@@ -1,6 +1,7 @@
 #include "StateMachineLib.h"
 #include "Keypad.h";
 #include "LiquidCrystal.h";
+#include "Servo.h";
 int Contlcd = 0;
 int ContClave = 0;
 int cont = 0;
@@ -14,8 +15,12 @@ int digito;
 char digitoconv;
 int ledGreen = 28;
 int ledRed = 30;
-int buzzer=26;
+int buzzer = 26;
 int tono = 1915;
+int pinservo = 36;
+int envioESP = 34;
+int llegadaESP = 32;
+Servo servoMotor;
 ///lcd
 LiquidCrystal lcd(13, 12, 11, 10, 9, 8); //(RS, RW, E, D4,D5, D6, D7)
 
@@ -86,12 +91,15 @@ void setupStateMachine()
 
 void setup()
 {
+  servoMotor.attach(pinservo);
   Serial.begin(9600);
   digitalWrite(ledGreen, LOW);
   digitalWrite(ledRed, LOW);
+  pinMode(llegadaESP, INPUT);
   //pinMode(16, OUTPUT);
   noTone(buzzer);
-  digitalWrite(buzzer,HIGH);
+  digitalWrite(buzzer, HIGH);
+  //digitalWrite(llegadaESP,LOW);
   //pinMode(buzzer, OUTPUT);
   digitalWrite(15, HIGH);
   digitalWrite(14, HIGH);
@@ -129,6 +137,8 @@ int readInput()
   //Se lee el dígito ingresado en el teclado matricial
 
   TECLA = teclado.waitForKey();
+  
+  
   if ( TECLA == '*') {
     lcd.print("                    ");
     lcd.setCursor(0, 1);
@@ -141,7 +151,6 @@ int readInput()
   {
 
     Serial.println(TECLA);
-
     currentState = stateMachine.GetState();
     TECLA -= 48;
     Contlcd++;
@@ -183,7 +192,7 @@ int readInput()
     miArray[cont++] = digitoconv;
     Serial.flush();
 
-    if (cont == 4) {
+    if ((cont == 4)||(digitalRead(llegadaESP)== 1)) {
       lcd.print("                    ");
       lcd.setCursor(0, 1);
       if (strcmp (miArray, clave) != 0) {
@@ -197,37 +206,57 @@ int readInput()
         ContClave ++;
       }
       digitalWrite(buzzer, HIGH);
-      if (strcmp (miArray, clave) == 0) {
-        noTone(buzzer);
-       digitalWrite(buzzer, HIGH);
-        //tone(buzzer,tono);
-        ContClave = 0;
-        digitalWrite(ledGreen, HIGH);
-        delay(2000);
-        digitalWrite(ledGreen, LOW);
+      if (((currentState == State::Espera) && (strcmp (miArray, clave) == 0))) {
+
+        // Desplazamos a la posición 0º
+        servoMotor.write(0);
+        // Esperamos 1 segundo
+        delay(1000);
+
+        // Desplazamos a la posición 180º
+        servoMotor.write(180);
+        // Esperamos 1 segundo
+        delay(1000);
+        
         currentInput = Input:: T;
 
       }
       if ((currentState == State::Espera) && (ContClave >= 3))
       {
-        tone(buzzer, tono,1000);
-        //digitalWrite(16, HIGH);
+        tone(buzzer, tono, 1000);
+        //digitalWrite(buzzer, LOW);
         currentInput = Input:: A;
       }
-      if ((currentState == State::Alerta) && (strcmp (miArray, clave) == 0))
+      Serial.print(digitalRead(llegadaESP));
+      if (((currentState == State::Alerta) && (strcmp (miArray, clave) == 0))||(digitalRead(llegadaESP)==1))
       {
 
         lcd.print("clave correcta");
         delay(2000);
         lcd.setCursor(0, 1);
         lcd.print("                    ");
+
+        noTone(buzzer);
+        digitalWrite(buzzer, HIGH);
+        //tone(buzzer,tono);
+        ContClave = 0;
+        digitalWrite(ledGreen, HIGH);
+        delay(2000);
+        digitalWrite(ledGreen, LOW);
         currentInput = Input:: R;
 
         delay(4000);
+        digitalWrite(llegadaESP,LOW);
       }
       if ((currentState == State::Encendido) && (strcmp (miArray, "0987") == 0))
       {
         ContClave = 0;
+        // Desplazamos a la posición 0º
+        servoMotor.write(0);
+        // Esperamos 1 segundo
+        delay(1000);
+
+        digitalWrite(pinservo, LOW);
         currentInput = Input:: R;
       }
       cont = 0;
